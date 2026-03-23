@@ -1,4 +1,6 @@
 let currentCoords = null;
+let mapInstance = null;
+
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const preview = document.getElementById('preview');
@@ -6,18 +8,39 @@ const snapBtn = document.getElementById('snap');
 const shareBtn = document.getElementById('share');
 const mapElement = document.getElementById('map');
 
-// 1. Kamera (Media Capture)
+const modal = document.getElementById('custom-modal');
+const modalMessage = document.getElementById('modal-message');
+const modalCloseBtn = document.getElementById('modal-close');
+
+function showModal(message) {
+    if (modal && modalMessage) {
+        modalMessage.textContent = message;
+        modal.style.display = 'flex';
+    }
+}
+
+if (modalCloseBtn) {
+    modalCloseBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+}
+
 async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         video.srcObject = stream;
         video.style.display = 'block';
     } catch (err) {
-        alert("Błąd kamery: " + err);
+        showModal("Błąd kamery: Odmowa dostępu lub urządzenie nie posiada kamery. Nadaj uprawnienia w ustawieniach przeglądarki.");
     }
 }
 
 snapBtn.addEventListener('click', () => {
+    if (!video.videoWidth) {
+        showModal("Nie można zrobić zdjęcia. Upewnij się, że zezwoliłeś na dostęp do kamery.");
+        return;
+    }
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d').drawImage(video, 0, 0);
@@ -29,41 +52,56 @@ snapBtn.addEventListener('click', () => {
     getLocation();
 });
 
-// 2. Geolokalizacja (GPS)
 function getLocation() {
     if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(position => {
-            currentCoords = position.coords;
-            showMap(currentCoords.latitude, currentCoords.longitude);
-            shareBtn.disabled = false;
-        });
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                currentCoords = position.coords;
+                showMap(currentCoords.latitude, currentCoords.longitude);
+                shareBtn.disabled = false;
+            },
+            err => {
+                showModal("Nie udało się pobrać lokalizacji. Sprawdź ustawienia GPS. Szczegóły: " + err.message);
+            }
+        );
+    } else {
+        showModal("Twoja przeglądarka nie wspiera geolokalizacji.");
     }
 }
 
 function showMap(lat, lon) {
     mapElement.style.display = 'block';
-    const map = L.map('map').setView([lat, lon], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    L.marker([lat, lon]).addTo(map).bindPopup('Miejsce zgłoszenia').openPopup();
+    
+    if (mapInstance !== null) {
+        mapInstance.remove();
+    }
+    
+    mapInstance = L.map('map').setView([lat, lon], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance);
+    L.marker([lat, lon]).addTo(mapInstance).bindPopup('Miejsce zgłoszenia').openPopup();
 }
 
-// 3. Web Share API
 shareBtn.addEventListener('click', async () => {
-    const blob = await (await fetch(preview.src)).blob();
-    const file = new File([blob], 'zgloszenie.jpg', { type: 'image/jpeg' });
+    if (!currentCoords || !preview.src) return;
 
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
+    try {
+        const response = await fetch(preview.src);
+        const blob = await response.blob();
+        const file = new File([blob], 'zgloszenie.jpg', { type: 'image/jpeg' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 title: 'Nowe zgłoszenie miejskie',
-                text: `Zgłaszam incydent na pozycji: ${currentCoords.latitude}, ${currentCoords.longitude}`,
+                text: `Zgłaszam incydent na pozycji GPS: ${currentCoords.latitude}, ${currentCoords.longitude}`,
                 files: [file]
             });
-        } catch (err) {
-            console.error("Błąd udostępniania:", err);
+        } else {
+            showModal("Twoje urządzenie lub przeglądarka nie wspiera Web Share API.");
         }
-    } else {
-        alert("Twoja przeglądarka nie wspiera udostępniania plików.");
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            showModal("Wystąpił błąd udostępniania: " + err.message);
+        }
     }
 });
 
