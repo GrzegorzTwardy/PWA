@@ -1,0 +1,23 @@
+{
+  "short_name": "EkoZgłoszenie",
+  "name": "EkoZgłoszenie - Raportuj Problemy",
+  "icons": [
+    {
+      "src": "icons/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/index.html",
+  "background_color": "#f8f9fa",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#198754",
+  "description": "Aplikacja do zgłaszania incydentów miejskich z lokalizacją GPS."
+}
